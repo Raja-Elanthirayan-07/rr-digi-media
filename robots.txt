@@ -1,0 +1,9 @@
+User-agent: *
+Disallow: /api/
+Disallow: /uploads/
+Disallow: /admin.html
+Disallow: /dashboard.html
+Disallow: /login.html
+Disallow: /signup.html
+
+Sitemap: /sitemap.xml

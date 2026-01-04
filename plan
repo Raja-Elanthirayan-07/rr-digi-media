@@ -1,0 +1,13 @@
+What’s still left before it’s truly “public usable” (typical launch blockers)
+
+Real payments: the “Pay Online” flow is not a real payment gateway integration yet (it’s essentially a confirm + create order). For public launch you’ll want Razorpay/Stripe/etc + webhook verification.
+Production deployment: hosting setup (Node server), domain, HTTPS, environment variables on the host, and a process manager (e.g., PM2) so it stays running.
+Operational basics: error logging, backups for the SQLite DB, and a way to view/download uploaded customer files safely.
+Content/SEO polish: metadata, favicon, sitemap/robots, and checking mobile responsiveness across pages.
+
+
+
+
+
+
+

@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="description" content="RR Digi Media customer dashboard for managing your profile and viewing orders." />
+  <title>Dashboard — RR Digi Media</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="icon" type="image/png" href="RRDigiMedia-Logo.jpg">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .dash-wrap{max-width:1000px;margin:30px auto}
+    .dash-card{border:1px solid #ffe4d6;background:#fff;border-radius:12px}
+  </style>
+</head>
+<body class="bg-light">
+  <nav class="navbar navbar-expand-lg bg-white shadow-sm sticky-top">
+    <div class="container">
+      <a class="navbar-brand d-flex align-items-center gap-2" href="index.html#home">
+        <img src="RRDigiMedia-Logo.jpg" alt="RR Digi Media logo" style="width:40px;height:40px;object-fit:cover;border-radius:50%;border:1px solid #ffe4d6" />
+        <div>
+          <div class="nav-brand">RR Digi Media</div>
+          <div class="small-muted">Dashboard</div>
+        </div>
+      </a>
+      <div class="ms-auto d-flex flex-wrap gap-2">
+        <a class="btn btn-outline-primary me-2" href="index.html#home">Home</a>
+        <button id="logoutBtn" class="btn btn-outline-secondary">Log out</button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container dash-wrap">
+    <div class="dash-card p-3 mb-3">
+      <h5 class="mb-2">Welcome, <span id="userEmail"></span></h5>
+      <p class="small-muted mb-3">Manage your profile and view recent activity.</p>
+
+      <form id="profileForm" class="row g-3" novalidate>
+        <div class="col-md-6">
+          <label class="form-label">Full Name</label>
+          <input type="text" id="name" class="form-control" required />
+          <div class="invalid-feedback">Please enter your name.</div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Mobile Number</label>
+          <input type="tel" id="phone" class="form-control" required pattern="^[0-9]{10}$" />
+          <div class="invalid-feedback">Enter a valid 10-digit mobile number.</div>
+        </div>
+        <div class="col-12">
+          <label class="form-label">Address</label>
+          <textarea id="address" class="form-control" rows="3" required></textarea>
+          <div class="invalid-feedback">Address is required.</div>
+        </div>
+        <div class="col-12 d-flex gap-2">
+          <button type="submit" class="btn btn-primary">Save changes</button>
+          <span id="saveStatus" class="small-muted"></span>
+        </div>
+      </form>
+    </div>
+
+    <div class="dash-card p-3">
+      <h6 class="mb-2">Orders</h6>
+      <div id="orders">Loading…</div>
+    </div>
+  </main>
+
+  <script>
+    async function api(path, method='GET', body){
+      const res = await fetch('/api/auth'+path, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: body ? JSON.stringify(body) : undefined
+      });
+      const data = await res.json().catch(()=>({}));
+      if(!res.ok) throw new Error(data.error || 'Request failed');
+      return data;
+    }
+
+    async function init(){
+      try{
+        const me = await api('/me');
+        document.getElementById('userEmail').textContent = me.user.email;
+        document.getElementById('name').value = me.user.name || '';
+        document.getElementById('phone').value = me.user.phone || '';
+        document.getElementById('address').value = me.user.address || '';
+      }catch{
+        // Not logged in, go to login
+        window.location.href = 'login.html';
+      }
+    }
+
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+      try{ await api('/logout','POST'); }catch{}
+      window.location.replace('index.html');
+    });
+
+    const profileForm = document.getElementById('profileForm');
+    const saveStatus = document.getElementById('saveStatus');
+    profileForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      saveStatus.textContent = '';
+      profileForm.classList.remove('was-validated');
+      const name = document.getElementById('name');
+      const phone = document.getElementById('phone');
+      const address = document.getElementById('address');
+      if(!name.value || !phone.checkValidity() || !address.value){
+        profileForm.classList.add('was-validated');
+        return;
+      }
+      try{
+        const r = await api('/update-profile','POST',{ name: name.value.trim(), phone: phone.value.trim(), address: address.value.trim() });
+        saveStatus.textContent = 'Saved';
+      }catch(err){
+        saveStatus.textContent = err.message;
+      }
+    });
+
+    async function loadOrders(){
+      try{
+        const res = await fetch('/api/orders/my', { credentials:'include' });
+        const data = await res.json();
+        const c = document.getElementById('orders');
+        if(!res.ok){ c.textContent = data.error || 'Failed to load orders'; return; }
+        if(!data.orders || !data.orders.length){ c.textContent = 'No orders yet. Place your first order from the homepage.'; return; }
+        const list = document.createElement('div');
+        data.orders.forEach(o => {
+          const item = document.createElement('div');
+          item.className = 'border rounded p-2 mb-2';
+          item.innerHTML = `<div class="d-flex justify-content-between"><div><strong>#${o.id.slice(0,8)}</strong> — ${o.serviceType} — ${o.size}${o.size==='custom' ? ` (${o.customW}x${o.customH} ft)` : ''}</div><div>₹${o.total}</div></div><div class="small-muted">${new Date(o.created_at).toLocaleString()}</div>`;
+          list.appendChild(item);
+        });
+        c.innerHTML = '';
+        c.appendChild(list);
+      }catch(err){
+        document.getElementById('orders').textContent = err.message;
+      }
+    }
+
+    async function boot(){
+      await init();
+      await loadOrders();
+    }
+
+    // Back/forward cache can restore old authenticated UI.
+    window.addEventListener('pageshow', () => {
+      boot();
+    });
+
+    boot();
+  </script>
+</body>
+</html>

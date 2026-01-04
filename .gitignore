@@ -1,0 +1,24 @@
+node_modules/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Local DB and uploads (use persistent storage in production)
+server/data.db
+server/uploads/
+
+# Logs
+*.log
+server.out.log
+server.err.log
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Backups
+backups/
+server/backups/

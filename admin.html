@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="description" content="RR Digi Media admin panel for managing orders." />
+  <title>Admin — Orders | RR Digi Media</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="icon" type="image/png" href="RRDigiMedia-Logo.jpg">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .admin-wrap{max-width:1200px;margin:24px auto}
+    .badge-status{font-size:.75rem}
+  </style>
+</head>
+<body class="bg-light">
+  <nav class="navbar navbar-expand-lg bg-white shadow-sm sticky-top">
+    <div class="container">
+      <a class="navbar-brand d-flex align-items-center gap-2" href="index.html#home">
+        <img src="RRDigiMedia-Logo.jpg" alt="RR Digi Media logo" style="width:40px;height:40px;border-radius:50%;border:1px solid #ffe4d6;object-fit:cover" />
+        <div>
+          <div class="nav-brand">RR Digi Media</div>
+          <div class="small-muted">Admin Panel</div>
+        </div>
+      </a>
+      <div class="ms-auto d-flex flex-wrap gap-2">
+        <a class="btn btn-outline-primary me-2" href="dashboard.html">My Dashboard</a>
+        <button id="logoutBtn" class="btn btn-outline-secondary">Log out</button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container admin-wrap">
+    <div class="card p-3 mb-3">
+      <div class="row g-3 align-items-end">
+        <div class="col-md-4">
+          <label class="form-label">Search</label>
+          <input id="q" class="form-control" placeholder="Order id, customer name or email" />
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Status</label>
+          <select id="status" class="form-select">
+            <option value="">All</option>
+            <option>pending</option>
+            <option>confirmed</option>
+            <option>designing</option>
+            <option>printing</option>
+            <option>completed</option>
+            <option>cancelled</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Sort</label>
+          <select id="sort" class="form-select">
+            <option value="created_desc">Newest</option>
+            <option value="total_desc">Total: High → Low</option>
+            <option value="total_asc">Total: Low → High</option>
+            <option value="status">Status</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <button id="applyFilters" class="btn btn-primary w-100">Apply</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card p-0">
+      <div class="table-responsive">
+        <table class="table mb-0 align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>Order</th>
+              <th>Customer</th>
+              <th>Details</th>
+              <th class="text-end">Total</th>
+              <th>Payment</th>
+              <th>Status</th>
+              <th class="text-end">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="ordersBody">
+            <tr><td colspan="7" class="text-center p-4">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    function badge(status){
+      const map = { pending:'secondary', confirmed:'primary', designing:'info', printing:'warning', completed:'success', cancelled:'danger' };
+      const cls = map[status] || 'secondary';
+      return `<span class="badge bg-${cls} badge-status text-capitalize">${status}</span>`;
+    }
+
+    function paymentBadge(status){
+      const s = String(status || 'unpaid').toLowerCase();
+      const cls = (s === 'paid') ? 'success' : 'secondary';
+      const label = (s === 'paid') ? 'Paid' : 'Unpaid';
+      return `<span class="badge bg-${cls} badge-status">${label}</span>`;
+    }
+
+    async function apiAdmin(path, params={}){
+      const url = new URL('/api/admin'+path, window.location.origin);
+      if(params && params.query){ Object.entries(params.query).forEach(([k,v])=>{ if(v!=='' && v!=null) url.searchParams.set(k,v); }); }
+      const res = await fetch(url, { credentials: 'include', method: params.method || 'GET', headers: { 'Content-Type': 'application/json' }, body: params.body ? JSON.stringify(params.body) : undefined });
+      const data = await res.json().catch(()=>({}));
+      if(!res.ok) throw new Error(data.error || 'Request failed');
+      return data;
+    }
+
+    async function requireAdmin(){
+      const res = await fetch('/api/auth/me', { credentials: 'include' });
+      const data = await res.json().catch(()=>({}));
+      if(!res.ok || !data.user || !data.user.is_admin){
+        window.location.href = 'login.html';
+        return null;
+      }
+      return data.user;
+    }
+
+    function renderRows(orders){
+      const tbody = document.getElementById('ordersBody');
+      if(!orders || !orders.length){ tbody.innerHTML = '<tr><td colspan="7" class="text-center p-4">No orders</td></tr>'; return; }
+      tbody.innerHTML = orders.map(o => {
+        const details = [
+          `${o.serviceType} / ${o.size}${o.size==='custom'?` (${o.customW}x${o.customH} ft)`:''}`,
+          `Finish: ${o.finish}, Qty: ${o.quantity}, Delivery: ${o.delivery}`,
+          o.instructions ? `Notes: ${o.instructions}` : ''
+        ].filter(Boolean).join('<br>');
+        const files = o.files && o.files.length ? `<div class="small text-muted">Files: ${o.files.map(f=>f.originalname).join(', ')}</div>`: '';
+        const payStatus = String(o.payment_status || 'unpaid').toLowerCase();
+        const totalNum = Number(o.total || 0);
+        const canMarkPaid = (payStatus !== 'paid') && totalNum > 0;
+        const canMarkUnpaid = (payStatus === 'paid') && totalNum > 0;
+        return `<tr>
+          <td><div><strong>#${o.id.slice(0,8)}</strong><div class="small text-muted">${new Date(o.created_at).toLocaleString()}</div></div></td>
+          <td><div>${o.user_name || ''}</div><div class="small text-muted">${o.user_email || ''}<br>${o.user_phone || ''}</div></td>
+          <td>${details}${files}</td>
+          <td class="text-end">₹${o.total}</td>
+          <td>
+            <div>${paymentBadge(o.payment_status)}</div>
+            <div class="small text-muted">${o.payment_provider ? String(o.payment_provider) : ''}</div>
+          </td>
+          <td>${badge(o.status)}</td>
+          <td class="text-end">
+            <div class="btn-group">
+              <button class="btn btn-sm btn-outline-primary" data-action="status" data-id="${o.id}" data-status="confirmed">Confirm</button>
+              <button class="btn btn-sm btn-outline-info" data-action="status" data-id="${o.id}" data-status="designing">Designing</button>
+              <button class="btn btn-sm btn-outline-warning" data-action="status" data-id="${o.id}" data-status="printing">Printing</button>
+              <button class="btn btn-sm btn-outline-success" data-action="status" data-id="${o.id}" data-status="completed">Completed</button>
+            </div>
+            ${canMarkPaid ? `
+              <button class="btn btn-sm btn-outline-dark ms-2" data-action="pay" data-id="${o.id}">Mark Paid (Offline)</button>
+            ` : ''}
+            ${canMarkUnpaid ? `
+              <button class="btn btn-sm btn-outline-secondary ms-2" data-action="unpay" data-id="${o.id}">Mark Unpaid</button>
+            ` : ''}
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    async function loadOrders(){
+      const q = document.getElementById('q').value.trim();
+      const status = document.getElementById('status').value;
+      const sort = document.getElementById('sort').value;
+      const sortParam = sort === 'total_desc' ? 'total_desc' : sort === 'total_asc' ? 'total_asc' : sort === 'status' ? 'status' : undefined;
+      const data = await apiAdmin('/orders', { query: { q, status, sort: sortParam } });
+      renderRows(data.orders);
+    }
+
+    document.getElementById('applyFilters').addEventListener('click', loadOrders);
+    document.getElementById('ordersBody').addEventListener('click', async (e) => {
+      const btn = e.target.closest('button[data-action="status"]');
+      const payBtn = e.target.closest('button[data-action="pay"]');
+      const unpayBtn = e.target.closest('button[data-action="unpay"]');
+      try{
+        if(btn){
+          const id = btn.getAttribute('data-id');
+          const status = btn.getAttribute('data-status');
+          await apiAdmin(`/orders/${id}/status`, { method:'POST', body:{ status } });
+          await loadOrders();
+          return;
+        }
+        if(payBtn){
+          const id = payBtn.getAttribute('data-id');
+          const ok = confirm('Mark this order as PAID (offline cash/UPI)?');
+          if(!ok) return;
+          await apiAdmin(`/orders/${id}/payment-status`, { method:'POST', body:{ status: 'paid' } });
+          await loadOrders();
+          return;
+        }
+        if(unpayBtn){
+          const id = unpayBtn.getAttribute('data-id');
+          const ok = confirm('Mark this order as UNPAID? (This will clear payment fields)');
+          if(!ok) return;
+          await apiAdmin(`/orders/${id}/payment-status`, { method:'POST', body:{ status: 'unpaid' } });
+          await loadOrders();
+          return;
+        }
+      }catch(err){ alert(err.message); }
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+      await fetch('/api/auth/logout', { method:'POST', credentials:'include' });
+      window.location.replace('login.html');
+    });
+
+    async function boot(){
+      const user = await requireAdmin();
+      if(!user) return;
+      await loadOrders();
+    }
+
+    // Back/forward cache can restore old authenticated UI.
+    window.addEventListener('pageshow', () => {
+      boot();
+    });
+
+    boot();
+  </script>
+</body>
+</html>

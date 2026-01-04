@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="description" content="Create an RR Digi Media account to place orders, request quotes, and track your orders." />
+  <title>Sign up — RR Digi Media</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="icon" type="image/png" href="RRDigiMedia-Logo.jpg">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .auth-card{max-width:520px;margin:60px auto;padding:24px;border:1px solid #ffe4d6;border-radius:12px;background:#fff}
+    .brand-header{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+    .brand-header img{width:40px;height:40px;border-radius:50%;border:1px solid #ffe4d6;object-fit:cover}
+    .help{color:#6b7280}
+  </style>
+</head>
+<body class="bg-light">
+  <main class="container">
+    <div class="auth-card">
+      <div class="brand-header">
+        <img src="RRDigiMedia-Logo.jpg" alt="RR Digi Media" />
+        <div>
+          <div class="fw-bold" style="color:var(--brand)">RR Digi Media</div>
+          <div class="help">Create your account to place orders and save quotes</div>
+        </div>
+      </div>
+
+      <form id="signupForm" novalidate>
+        <div class="mb-3">
+          <label class="form-label">Full Name</label>
+          <input type="text" id="name" class="form-control" placeholder="Your name" required />
+          <div class="invalid-feedback">Please enter your name.</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Mobile Number</label>
+          <input type="tel" id="phone" class="form-control" placeholder="10-digit mobile" required pattern="^[0-9]{10}$" />
+          <div class="invalid-feedback">Enter a valid 10-digit mobile number.</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Email</label>
+          <input type="email" id="email" class="form-control" placeholder="you@example.com" required />
+          <div class="invalid-feedback">Please enter a valid email.</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Password</label>
+          <input type="password" id="password" class="form-control" placeholder="At least 6 characters" required minlength="6" />
+          <div class="invalid-feedback">Password must be at least 6 characters.</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Confirm Password</label>
+          <input type="password" id="confirm" class="form-control" placeholder="Re-enter password" required minlength="6" />
+          <div class="invalid-feedback">Passwords must match.</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Address</label>
+          <textarea id="address" class="form-control" rows="3" placeholder="Street, Area, City, Pincode" required></textarea>
+          <div class="invalid-feedback">Address is required.</div>
+        </div>
+        <div class="d-grid gap-2">
+          <button type="submit" class="btn btn-primary">Create account</button>
+          <a class="btn btn-outline-primary" href="login.html">Already have an account? Log in</a>
+        </div>
+        <div id="error" class="mt-3 text-danger" role="alert" style="display:none"></div>
+      </form>
+
+      <form id="otpVerifyForm" class="mt-3" style="display:none" novalidate>
+        <div class="mb-2 small-muted">We sent a 6-digit OTP to your email and phone (if SMS is configured).</div>
+        <div class="mb-3">
+          <label class="form-label">OTP Code</label>
+          <input type="text" id="code" class="form-control" inputmode="numeric" autocomplete="one-time-code" placeholder="Enter 6-digit code" required pattern="^[0-9]{6}$" />
+          <div class="invalid-feedback">Enter the 6-digit OTP.</div>
+        </div>
+        <div class="d-grid gap-2">
+          <button type="submit" class="btn btn-primary" id="verifyOtpBtn">Verify & Finish Signup</button>
+          <button type="button" class="btn btn-outline-secondary" id="resendBtn">Resend OTP</button>
+        </div>
+      </form>
+    </div>
+  </main>
+
+  <script>
+    async function api(path, method='GET', body){
+      const res = await fetch('/api/auth'+path, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: body ? JSON.stringify(body) : undefined
+      });
+      const data = await res.json().catch(()=>({}));
+      if(!res.ok) throw new Error(data.error || 'Request failed');
+      return data;
+    }
+
+    const nextParam = new URLSearchParams(window.location.search).get('next');
+    function postSignupRedirect(){
+      if(nextParam === 'order'){
+        window.location.href = 'index.html?openOrder=1#order';
+        return;
+      }
+      window.location.href = 'index.html';
+    }
+
+    const form = document.getElementById('signupForm');
+    const verifyForm = document.getElementById('otpVerifyForm');
+  const nameEl = document.getElementById('name');
+  const phoneEl = document.getElementById('phone');
+    const emailEl = document.getElementById('email');
+    const passwordEl = document.getElementById('password');
+    const confirmEl = document.getElementById('confirm');
+  const addressEl = document.getElementById('address');
+    const codeEl = document.getElementById('code');
+    const resendBtn = document.getElementById('resendBtn');
+    const verifyOtpBtn = document.getElementById('verifyOtpBtn');
+    const errorEl = document.getElementById('error');
+
+    function showError(msg){
+      errorEl.textContent = msg;
+      errorEl.style.display = 'block';
+    }
+
+    function clearError(){
+      errorEl.textContent = '';
+      errorEl.style.display = 'none';
+    }
+
+    function disable(el, on){
+      if(!el) return;
+      el.disabled = !!on;
+    }
+
+    async function resendOtp(){
+      // Uses the normal OTP request endpoint
+      await api('/request-otp','POST',{ email: emailEl.value.trim() });
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      clearError();
+      form.classList.remove('was-validated');
+
+  const basicValid = nameEl.value && phoneEl.checkValidity() && emailEl.checkValidity() && passwordEl.value.length >= 6 && confirmEl.value.length >= 6 && addressEl.value.trim().length > 0;
+      const match = passwordEl.value === confirmEl.value;
+      if(!basicValid || !match){
+        if(!match){ confirmEl.setCustomValidity('Passwords do not match'); } else { confirmEl.setCustomValidity(''); }
+        form.classList.add('was-validated');
+        return;
+      }
+      confirmEl.setCustomValidity('');
+
+      try{
+        const r = await api('/signup','POST',{ name: nameEl.value.trim(), phone: phoneEl.value.trim(), email: emailEl.value.trim(), password: passwordEl.value, address: addressEl.value.trim() });
+        // Show OTP verification form
+        verifyForm.style.display = 'block';
+        // Lock the signup fields so the user verifies the same email/phone
+        form.querySelectorAll('input, textarea, button').forEach(el => { el.disabled = true; });
+        codeEl.value = '';
+        codeEl.focus();
+        // Helpful in dev (shows OTP in console if server returns it)
+        if(r && r.devOtp){
+          console.log('[dev] Signup OTP:', r.devOtp);
+        }
+      }catch(err){
+        showError(err.message);
+      }
+    });
+
+    resendBtn.addEventListener('click', async () => {
+      clearError();
+      try{
+        disable(resendBtn, true);
+        await resendOtp();
+      }catch(err){
+        showError(err.message);
+      }finally{
+        disable(resendBtn, false);
+      }
+    });
+
+    verifyForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      clearError();
+      verifyForm.classList.remove('was-validated');
+
+      if(!codeEl.checkValidity()){
+        verifyForm.classList.add('was-validated');
+        return;
+      }
+
+      try{
+        disable(verifyOtpBtn, true);
+        await api('/verify-otp','POST',{ email: emailEl.value.trim(), code: codeEl.value.trim() });
+        // Verified + logged in
+        postSignupRedirect();
+      }catch(err){
+        showError(err.message);
+      }finally{
+        disable(verifyOtpBtn, false);
+      }
+    });
+  </script>
+</body>
+</html>
